@@ -28,4 +28,5 @@ jobs:
           env:
           PELLA_CLIENT: ${{ secrets.PELLA_CLIENT }}
           PELLA_CLIENT_UAT: ${{ secrets.PELLA_CLIENT_UAT }}
+          PELLA_ACTIVE_CONTEXT: ${{ secrets.PELLA_ACTIVE_CONTEXT }}
         run: python main.py 
