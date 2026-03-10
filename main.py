@@ -1,6 +1,13 @@
 import json
 import requests
-from DrissionPage import ChromiumPage
+from DrissionPage import ChromiumPage, ChromiumOptions
+
+co = ChromiumOptions()
+co.headless() # 开启无头模式
+co.set_argument('--no-sandbox') # 解决 Linux 运行权限问题
+co.set_argument('--disable-gpu') 
+
+page = ChromiumPage(co)
 
 # ================= 配置区 =================
 # 填入你刚才截图里的那个实例 ID
