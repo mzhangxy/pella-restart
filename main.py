@@ -1,18 +1,8 @@
-import json
+import os
 import requests
 from DrissionPage import ChromiumPage, ChromiumOptions
 
-co = ChromiumOptions()
-co.headless() # 开启无头模式
-co.set_argument('--no-sandbox') # 解决 Linux 运行权限问题
-co.set_argument('--disable-gpu') 
-
-page = ChromiumPage(co)
-
-# ================= 配置区 =================
-# 填入你刚才截图里的那个实例 ID
 TARGET_SERVER_ID = "9dbd8fbc687149208257283116ed74d5"
-# ==========================================
 
 def trigger_remote_redeploy(token, server_id):
     """发送远程开机/重启指令"""
@@ -39,51 +29,59 @@ def trigger_remote_redeploy(token, server_id):
             print("详细信息:", response.text)
     except Exception as e:
         print(f"❌ 请求发生网络异常: {e}")
+    pass
 
 def main():
-    print("🌐 启动 DrissionPage 浏览器环境...")
-    # 初始化浏览器（这里为了调试方便，默认会显示浏览器窗口。若想无头运行，可配置 ChromiumOptions）
-    page = ChromiumPage()
+    print("🌐 启动云端无头浏览器...")
+    co = ChromiumOptions()
+    co.headless() # 必须开启无头模式
+    co.set_argument('--no-sandbox')
+    co.set_argument('--disable-gpu')
+    page = ChromiumPage(co)
     
-    # 启动监听：拦截前往 clerk.pella.app 申请 Token 的 POST 请求
+    # 1. 先访问一下目标域名，建立上下文，否则无法写入 Cookie
+    print("📍 正在初始化域名上下文...")
+    page.get('https://www.pella.app/')
+    page.wait.load_start()
+    
+    # 2. 从环境变量中读取并注入你的专属 Cookie
+    pella_cookies = os.environ.get('PELLA_COOKIES', '')
+    if pella_cookies:
+        print("🍪 正在注入登录凭证 (Cookies)...")
+        page.set.cookies(pella_cookies)
+    else:
+        print("⚠️ 未检测到 PELLA_COOKIES 环境变量，可能无法绕过登录！")
+
+    # 3. 启动监听
     listen_url = 'clerk.pella.app/v1/client/sessions'
     page.listen.start(listen_url)
     
+    # 4. 带着 Cookie 重新访问面板主页，触发 Token 刷新
     print("⏳ 正在访问 Pella 控制台，等待拦截身份 Token...")
-    page.get('https://www.pella.app/') # 也可以直接访问你的 dashboard 页面
+    page.get('https://www.pella.app/')
     
-    # 只要网页加载并尝试获取会话，就能抓到这个包
-    packet = page.listen.wait()
+    # 🚨 关键修复：设置 timeout=15 秒，避免无限卡死！
+    packet = page.listen.wait(timeout=15)
     
     if packet and packet.request.method == 'POST':
         print("🎯 成功拦截到 Clerk 认证响应！")
-        
         try:
-            # Clerk 的响应通常是一个 JSON，里面包含了 jwt 字段
-            # 注意：实际响应结构可能略有不同，如果不成功，我们需要打印 packet.response.body 看看具体结构
             res_body = packet.response.body
-            
-            # 通常 token 会藏在这个 JSON 的 client -> sessions -> lastActiveToken -> jwt 类似的位置
-            # 这是一个常见的结构示例，具体需要根据你抓到的 JSON 来微调：
+            # 提取 token
             token = res_body.get('client', {}).get('sessions', [{}])[0].get('lastActiveToken', {}).get('jwt')
-            
-            # 如果上面这种提取方式失败，你可以在控制台打印出完整的 res_body 自己寻找一下键名
-            # print(json.dumps(res_body, indent=2))
             
             if token:
                 print("🔑 成功提取到授权 Token！")
-                # 拿到 Token 后，立刻调用我们的重启函数
                 trigger_remote_redeploy(token, TARGET_SERVER_ID)
             else:
-                print("⚠️ 抓到了包，但没有在预期的字段找到 Token，请检查 JSON 结构。")
-                print("实际响应体:", res_body)
-                
+                print("⚠️ 未找到 Token 字段。")
         except Exception as e:
             print(f"❌ 解析 Token 失败: {e}")
     else:
-        print("⚠️ 未能拦截到目标请求或请求超时。")
+        print("❌ 拦截超时 (15秒)。页面可能未登录，或者被 Cloudflare 验证码拦截了。")
+        # 调试用：打印当前页面源码或截图，看看是不是卡在验证码了
+        # print(page.html) 
 
-    print("\n任务结束，关闭浏览器。")
     page.quit()
 
 if __name__ == "__main__":
