@@ -24,4 +24,6 @@ jobs:
           pip install DrissionPage requests 
 
       - name: Run Restart
+        env:
+          PELLA_COOKIES: ${{ secrets.PELLA_COOKIES }}
         run: python main.py 
