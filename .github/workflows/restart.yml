@@ -25,5 +25,7 @@ jobs:
 
       - name: Run Restart
         env:
-          PELLA_COOKIES: ${{ secrets.PELLA_COOKIES }}
+          env:
+          PELLA_CLIENT: ${{ secrets.PELLA_CLIENT }}
+          PELLA_CLIENT_UAT: ${{ secrets.PELLA_CLIENT_UAT }}
         run: python main.py 
